@@ -2,8 +2,6 @@ package diocean
 
 import (
 	"encoding/json"
-	"errors"
-	"flag"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -14,16 +12,12 @@ import (
 	"strings"
 )
 
-type ConfigType map[string]string
-
-var Config ConfigType
-
-type CmdlineOptionsStruct struct {
-	Verbose      bool
-	WaitForEvent bool
+type DioceanClient struct {
+  ClientId string
+  ApiKey string
+  Verbose bool
+  WaitForEvents bool
 }
-
-var CmdlineOptions CmdlineOptionsStruct
 
 // https://developers.digitalocean.com/sizes/
 
@@ -310,10 +304,6 @@ func (self *SshKeysResponse) Header() []string {
 }
 
 func (self *SshKeysResponse) Unmarshal(body []byte) {
-	if CmdlineOptions.Verbose {
-		fmt.Fprintf(os.Stderr, "SshKeysResponse.Unmarshal body=%s\n", body)
-	}
-
 	json.Unmarshal(body, self)
 	if self.Ssh_keys == nil {
 		keys := make([]SshKeyInfo, 0)
@@ -432,205 +422,14 @@ func (self *EventInfo) ToStringArray() []string {
 
 ////////////////////
 
-type RouteHandler func(*Route)
-
-type Route struct {
-	Pattern  []string
-	Params   map[string]string
-	Args     []string
-	Handler  RouteHandler
-	HelpText *string
-}
-
-var RoutingTable []*Route
-
-func InitRoutingTable() {
-	RoutingTable = make([]*Route, 0)
-
-	RoutingTable = append(RoutingTable, &Route{
-		Pattern: []string{"sizes", "ls"},
-		Params:  make(map[string]string),
-		Handler: DropletSizesLs,
-	})
-
-	RoutingTable = append(RoutingTable, &Route{
-		Pattern: []string{"droplets", "ls", ":dropletId"},
-		Params:  make(map[string]string),
-		Handler: DoDropletsLsDroplet,
-	})
-
-	RoutingTable = append(RoutingTable, &Route{
-		Pattern: []string{"droplets", "show", ":dropletId"},
-		Params:  make(map[string]string),
-		Handler: DoDropletsLsDroplet,
-	})
-
-	RoutingTable = append(RoutingTable, &Route{
-		Pattern: []string{"droplets", "reboot", ":droplet_id"},
-		Params:  make(map[string]string),
-		Handler: DoDropletsRebootDroplet,
-	})
-
-	RoutingTable = append(RoutingTable, &Route{
-		Pattern: []string{"droplets", "power-cycle", ":droplet_id"},
-		Params:  make(map[string]string),
-		Handler: DoDropletsPowerCycleDroplet,
-	})
-
-	RoutingTable = append(RoutingTable, &Route{
-		Pattern: []string{"droplets", "shut-down", ":droplet_id"},
-		Params:  make(map[string]string),
-		Handler: DoDropletsShutDownDroplet,
-	})
-
-	RoutingTable = append(RoutingTable, &Route{
-		Pattern: []string{"droplets", "shutdown", ":droplet_id"},
-		Params:  make(map[string]string),
-		Handler: DoDropletsShutDownDroplet,
-	})
-
-	RoutingTable = append(RoutingTable, &Route{
-		Pattern: []string{"droplets", "power-off", ":droplet_id"},
-		Params:  make(map[string]string),
-		Handler: DoDropletsPowerOffDroplet,
-	})
-
-	RoutingTable = append(RoutingTable, &Route{
-		Pattern: []string{"droplets", "poweroff", ":droplet_id"},
-		Params:  make(map[string]string),
-		Handler: DoDropletsPowerOffDroplet,
-	})
-
-	RoutingTable = append(RoutingTable, &Route{
-		Pattern: []string{"droplets", "power-on", ":droplet_id"},
-		Params:  make(map[string]string),
-		Handler: DoDropletsPowerOnDroplet,
-	})
-
-	RoutingTable = append(RoutingTable, &Route{
-		Pattern: []string{"droplets", "poweron", ":droplet_id"},
-		Params:  make(map[string]string),
-		Handler: DoDropletsPowerOnDroplet,
-	})
-
-	RoutingTable = append(RoutingTable, &Route{
-		Pattern: []string{"droplets", "password-reset", ":droplet_id"},
-		Params:  make(map[string]string),
-		Handler: DoDropletsPasswordResetDroplet,
-	})
-
-	RoutingTable = append(RoutingTable, &Route{
-		Pattern: []string{"droplets", "resize", ":droplet_id", ":size"},
-		Params:  make(map[string]string),
-		Handler: DoDropletsResizeDroplet,
-	})
-
-	RoutingTable = append(RoutingTable, &Route{
-		Pattern: []string{"droplets", "snapshot", ":droplet_id", ":name"},
-		Params:  make(map[string]string),
-		Handler: DoDropletsSnapshotDroplet,
-	})
-
-	RoutingTable = append(RoutingTable, &Route{
-		Pattern: []string{"droplets", "snapshot", ":droplet_id"},
-		Params:  make(map[string]string),
-		Handler: DoDropletsSnapshotDroplet,
-	})
-
-	RoutingTable = append(RoutingTable, &Route{
-		Pattern: []string{"droplets", "new", ":name", ":size", ":image", ":region", ":ssh_key_ids", ":private_networking", ":backups_enabled"},
-		Params:  make(map[string]string),
-		Handler: DoDropletsNewDroplet,
-	})
-
-	RoutingTable = append(RoutingTable, &Route{
-		Pattern: []string{"droplets", "destroy", ":droplet_id", ":scrub_data"},
-		Params:  make(map[string]string),
-		Handler: DoDropletsDestroyDroplet,
-	})
-
-	RoutingTable = append(RoutingTable, &Route{
-		Pattern: []string{"droplets", "ls"},
-		Params:  make(map[string]string),
-		Handler: DoDropletsLs,
-	})
-
-	RoutingTable = append(RoutingTable, &Route{
-		Pattern: []string{"images", "ls"},
-		Params:  make(map[string]string),
-		Handler: DoImagesLs})
-
-	RoutingTable = append(RoutingTable, &Route{
-		Pattern: []string{"images", "show", ":image_id"},
-		Params:  make(map[string]string),
-		Handler: DoImageShow,
-	})
-
-	RoutingTable = append(RoutingTable, &Route{
-		Pattern: []string{"images", "destroy", ":image_id"},
-		Params:  make(map[string]string),
-		Handler: DoImageDestroy,
-	})
-
-	RoutingTable = append(RoutingTable, &Route{
-		Pattern: []string{"events", "show", ":event_id"},
-		Params:  make(map[string]string),
-		Handler: DoEventShow,
-	})
-
-	RoutingTable = append(RoutingTable, &Route{
-		Pattern: []string{"events", "wait", ":event_id"},
-		Params:  make(map[string]string),
-		Handler: DoEventWait,
-	})
-
-	RoutingTable = append(RoutingTable, &Route{
-		Pattern: []string{"regions", "ls"},
-		Params:  make(map[string]string),
-		Handler: DoRegionsLs,
-	})
-
-	RoutingTable = append(RoutingTable, &Route{
-		Pattern: []string{"ssh-keys", "ls"},
-		Params:  make(map[string]string),
-		Handler: DoSshKeysLs,
-	})
-
-	RoutingTable = append(RoutingTable, &Route{
-		Pattern: []string{"ssh", "fix-known-hosts"},
-		Params:  make(map[string]string),
-		Handler: DoSshFixKnownHosts,
-	})
-
-	RoutingTable = append(RoutingTable, &Route{
-		Pattern: []string{"help"},
-		Params:  make(map[string]string),
-		Handler: ShowGeneralHelp,
-	})
-
-}
-
-func ShowGeneralHelp(route *Route) {
-	fmt.Printf("diocean <command> [arg1 [arg2 ..]] \n")
-	fmt.Printf("  Commands:\n")
-	for _, route := range RoutingTable {
-		fmt.Printf("    %s\n", strings.Join(route.Pattern, "\t"))
-		if route.HelpText != nil {
-			fmt.Printf("\n")
-			fmt.Print(route.HelpText)
-			fmt.Printf("\n")
-		}
-	}
-}
-
-func ApiGet(path string, params *url.Values) (*http.Response, []byte, error) {
+func (self *DioceanClient) ApiGet(path string, params *url.Values) (*http.Response, []byte, error) {
 	if params == nil {
 		params = &url.Values{}
 	}
-	params.Add("client_id", Config["ClientId"])
-	params.Add("api_key", Config["ApiKey"])
+	params.Add("client_id", self.ClientId)
+	params.Add("api_key", self.ApiKey)
 	url := fmt.Sprintf("https://api.digitalocean.com%s?", path) + params.Encode()
-	if CmdlineOptions.Verbose {
+	if self.Verbose {
 		fmt.Fprintf(os.Stderr, "ApiGet: url=%s\n", url)
 	}
 	resp, err := http.Get(url)
@@ -649,31 +448,6 @@ func ApiGet(path string, params *url.Values) (*http.Response, []byte, error) {
 	return resp, body, nil
 }
 
-func ApiGetParsed(path string) (*http.Response, map[string]interface{}, error) {
-	resp, body, err := ApiGet(path, nil)
-
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error performing http.get[%s]: %s\n", path, err)
-		return resp, nil, err
-	}
-
-	var content map[string]interface{}
-	json.Unmarshal(body, &content)
-
-	if CmdlineOptions.Verbose {
-		fmt.Fprintf(os.Stderr, "  resp: %s\n", resp)
-	}
-	if CmdlineOptions.Verbose {
-		fmt.Fprintf(os.Stderr, "  content: %s\n", content)
-	}
-
-	if content["status"] != "OK" {
-		return resp, content, errors.New(fmt.Sprintf("Request Failed (not OK): status=%s", content["status"]))
-	}
-
-	return resp, content, nil
-}
-
 func MapGetString(m map[string]interface{}, k string, defaultValue string) string {
 	val, ok := m[k]
 	if ok && val != nil {
@@ -683,9 +457,9 @@ func MapGetString(m map[string]interface{}, k string, defaultValue string) strin
 	return defaultValue
 }
 
-func DoImagesLs(route *Route) {
+func (self *DioceanClient) DoImagesLs() {
 	path := "/images/"
-	_, body, err := ApiGet(path, nil)
+	_, body, err := self.ApiGet(path, nil)
 
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error performing http.get[%s]: %s\n", path, err)
@@ -704,9 +478,9 @@ func DoImagesLs(route *Route) {
 	}
 }
 
-func DoImageShow(route *Route) {
-	path := fmt.Sprintf("/images/%s", route.Params["image_id"])
-	_, body, err := ApiGet(path, nil)
+func (self *DioceanClient) DoImageShow(image_id string) {
+	path := fmt.Sprintf("/images/%s", image_id)
+	_, body, err := self.ApiGet(path, nil)
 
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error performing http.get[%s]: %s\n", path, err)
@@ -721,9 +495,9 @@ func DoImageShow(route *Route) {
 	fmt.Print("\n")
 }
 
-func DoImageDestroy(route *Route) {
-	path := fmt.Sprintf("/images/%s/destroy", route.Params["image_id"])
-	_, body, err := ApiGet(path, nil)
+func (self *DioceanClient) DoImageDestroy(image_id string) {
+	path := fmt.Sprintf("/images/%s/destroy", image_id)
+	_, body, err := self.ApiGet(path, nil)
 
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error performing http.get[%s]: %s\n", path, err)
@@ -742,16 +516,16 @@ func DoImageDestroy(route *Route) {
 
 }
 
-func EventShow(eventId string) *EventResponse {
+func (self *DioceanClient) EventShow(eventId string) *EventResponse {
 	path := fmt.Sprintf("/events/%s/", eventId)
-	_, body, err := ApiGet(path, nil)
+	_, body, err := self.ApiGet(path, nil)
 
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error performing http.get[%s]: %s\n", path, err)
 		os.Exit(1)
 	}
 
-	if CmdlineOptions.Verbose {
+	if self.Verbose {
 		fmt.Fprintf(os.Stderr, "body=%s\n", body)
 	}
 
@@ -762,15 +536,15 @@ func EventShow(eventId string) *EventResponse {
 		os.Exit(1)
 	}
 
-	if CmdlineOptions.Verbose {
+	if self.Verbose {
 		fmt.Fprintf(os.Stderr, "resp=%s\n", resp)
 	}
 
 	return &resp
 }
 
-func DoEventShow(route *Route) {
-	resp := EventShow(route.Params["event_id"])
+func (self *DioceanClient) DoEventShow(event_id string) {
+	resp := self.EventShow(event_id)
 
 	fmt.Print(strings.Join(resp.Header(), "\t"))
 	fmt.Print("\n")
@@ -778,8 +552,8 @@ func DoEventShow(route *Route) {
 	fmt.Print("\n")
 }
 
-func WaitForEvent(eventId string) {
-	resp := EventShow(eventId)
+func (self *DioceanClient) WaitForEvent(eventId string) {
+	resp := self.EventShow(eventId)
 
 	fmt.Print(strings.Join(resp.Header(), "\t"))
 	fmt.Print("\n")
@@ -789,17 +563,17 @@ func WaitForEvent(eventId string) {
 		if resp.Event.Percentage == "100" {
 			break
 		}
-		resp = EventShow(eventId)
+		resp = self.EventShow(eventId)
 	}
 }
 
-func DoEventWait(route *Route) {
-	WaitForEvent(route.Params["event_id"])
+func (self *DioceanClient) DoEventWait(event_id string) {
+	self.WaitForEvent(event_id)
 }
 
-func DropletsLs() *ActiveDropletsResponse {
+func (self *DioceanClient) DropletsLs() *ActiveDropletsResponse {
 	path := "/droplets/"
-	_, body, err := ApiGet(path, nil)
+	_, body, err := self.ApiGet(path, nil)
 
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error performing http.get[%s]: %s\n", path, err)
@@ -817,8 +591,8 @@ func DropletsLs() *ActiveDropletsResponse {
 	return &resp
 }
 
-func DoDropletsLs(route *Route) {
-	resp := DropletsLs()
+func (self *DioceanClient) DoDropletsLs() {
+	resp := self.DropletsLs()
 
 	fmt.Printf("%s\n", strings.Join(resp.Header(), "\t"))
 	for _, droplet := range resp.Droplets {
@@ -827,8 +601,8 @@ func DoDropletsLs(route *Route) {
 	}
 }
 
-func DoApiGetWithSimpleResponse(path string, params *url.Values) {
-	_, body, err := ApiGet(path, params)
+func (self *DioceanClient) DoApiGetWithSimpleResponse(path string, params *url.Values) {
+	_, body, err := self.ApiGet(path, params)
 
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error performing http.get[%s]: %s\n", path, err)
@@ -848,20 +622,20 @@ func DoApiGetWithSimpleResponse(path string, params *url.Values) {
 	fmt.Printf("%.f", resp.Event_id)
 	fmt.Print("\n")
 
-	if CmdlineOptions.WaitForEvent {
-		WaitForEvent(fmt.Sprintf("%.f", resp.Event_id))
+	if self.WaitForEvents {
+		self.WaitForEvent(fmt.Sprintf("%.f", resp.Event_id))
 	}
 }
 
-func DoDropletsDestroyDroplet(route *Route) {
+func (self *DioceanClient) DoDropletsDestroyDroplet(droplet_id string, scrub_data string) {
 	params := &url.Values{}
-	if CmdlineOptions.Verbose {
-		fmt.Printf("DoDropletsDestroyDroplet: route=%s\n", route)
+	if self.Verbose {
+		fmt.Printf("DoDropletsDestroyDroplet: droplet_id=%s\n", droplet_id)
 	}
-	params.Add("scrub_data", route.Params["scrub_data"])
+	params.Add("scrub_data", scrub_data)
 
-	path := fmt.Sprintf("/droplets/%s/destroy/", route.Params["droplet_id"])
-	DoApiGetWithSimpleResponse(path, params)
+	path := fmt.Sprintf("/droplets/%s/destroy/", droplet_id)
+	self.DoApiGetWithSimpleResponse(path, params)
 }
 
 func ParamsAddSize(params *url.Values, size string) {
@@ -878,47 +652,47 @@ func ParamsAddSize(params *url.Values, size string) {
 	}
 }
 
-func DoDropletsNewDroplet(route *Route) {
+func (self *DioceanClient) DoDropletsNewDroplet (name string, size string, image string, region string, ssh_key_ids string, private_networking string, backups_enabled string) {
 	params := &url.Values{}
-	params.Add("name", route.Params["name"])
+	params.Add("name", name)
 
-	ParamsAddSize(params, route.Params["size"])
+	ParamsAddSize(params, size)
 
-	matched, err := regexp.MatchString("^\\d+$", route.Params["image"])
+	matched, err := regexp.MatchString("^\\d+$", image)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error regex match failed: %s\n", err)
 		os.Exit(1)
 	}
 
 	if matched {
-		params.Add("image_id", route.Params["image"])
+		params.Add("image_id", image)
 	} else {
-		params.Add("image_slug", route.Params["image"])
+		params.Add("image_slug", image)
 	}
 
-	matched, err = regexp.MatchString("^\\d+$", route.Params["region"])
+	matched, err = regexp.MatchString("^\\d+$", region)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error regex match failed: %s\n", err)
 		os.Exit(1)
 	}
 
 	if matched {
-		params.Add("region_id", route.Params["region"])
+		params.Add("region_id", region)
 	} else {
-		params.Add("region_slug", route.Params["region"])
+		params.Add("region_slug", region)
 	}
 
-	params.Add("ssh_key_ids", route.Params["ssh_key_ids"])
-	params.Add("private_networking", route.Params["private_networking"])
-	params.Add("backups_enabled", route.Params["backups_enabled"])
+	params.Add("ssh_key_ids", ssh_key_ids)
+	params.Add("private_networking", private_networking)
+	params.Add("backups_enabled", backups_enabled)
 
-	_, body, err := ApiGet("/droplets/new", params)
+	_, body, err := self.ApiGet("/droplets/new", params)
 
 	var resp NewDropletResponse
 	resp.Unmarshal(body)
 
 	if resp.Status != "OK" {
-		fmt.Fprintf(os.Stderr, "Error: status != OK status=%s resp=%s\n", resp.Status, string(body))
+    fmt.Fprintf(os.Stderr, "Error: status != OK status=%s resp=%s\n", resp.Status, string(body))
 		os.Exit(1)
 	}
 
@@ -929,12 +703,12 @@ func DoDropletsNewDroplet(route *Route) {
 
 }
 
-func DoDropletsLsDroplet(route *Route) {
-	if CmdlineOptions.Verbose {
-		fmt.Fprintf(os.Stderr, "DoDropletsLsDroplet %s\n", route)
+func (self *DioceanClient) DoDropletsLsDroplet(droplet_id string) {
+	if self.Verbose {
+		fmt.Fprintf(os.Stderr, "DoDropletsLsDroplet %s\n", droplet_id)
 	}
-	path := fmt.Sprintf("/droplets/%s", route.Params["dropletId"])
-	_, body, err := ApiGet(path, nil)
+	path := fmt.Sprintf("/droplets/%s", droplet_id)
+	_, body, err := self.ApiGet(path, nil)
 
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error performing http.get[%s]: %s\n", path, err)
@@ -950,92 +724,85 @@ func DoDropletsLsDroplet(route *Route) {
 	fmt.Print("\n")
 }
 
-func DoDropletsRebootDroplet(route *Route) {
-	if CmdlineOptions.Verbose {
-		fmt.Printf("DoDropletsRebootDroplet: route=%s\n", route)
+func (self *DioceanClient) DoDropletsRebootDroplet(droplet_id string) {
+	if self.Verbose {
+		fmt.Printf("DoDropletsRebootDroplet: %s\n", droplet_id)
 	}
 
-	path := fmt.Sprintf("/droplets/%s/reboot/", route.Params["droplet_id"])
-	DoApiGetWithSimpleResponse(path, nil)
+	path := fmt.Sprintf("/droplets/%s/reboot/", droplet_id)
+	self.DoApiGetWithSimpleResponse(path, nil)
 }
 
-func DoDropletsPowerCycleDroplet(route *Route) {
-	if CmdlineOptions.Verbose {
-		fmt.Printf("DoDropletsPowerCycleDroplet: route=%s\n", route)
+func (self *DioceanClient) DoDropletsPowerCycleDroplet(droplet_id string) {
+	if self.Verbose {
+		fmt.Printf("DoDropletsPowerCycleDroplet: droplet_id=%s\n", droplet_id)
 	}
 
-	path := fmt.Sprintf("/droplets/%s/power_cycle/", route.Params["droplet_id"])
-	DoApiGetWithSimpleResponse(path, nil)
+	path := fmt.Sprintf("/droplets/%s/power_cycle/", droplet_id)
+	self.DoApiGetWithSimpleResponse(path, nil)
 }
 
-func DoDropletsShutDownDroplet(route *Route) {
-	if CmdlineOptions.Verbose {
-		fmt.Printf("DoDropletsShutDownDroplet: route=%s\n", route)
+func (self *DioceanClient) DoDropletsShutDownDroplet(droplet_id string) {
+	if self.Verbose {
+		fmt.Printf("DoDropletsShutDownDroplet: %s\n", droplet_id)
 	}
 
-	path := fmt.Sprintf("/droplets/%s/shutdown/", route.Params["droplet_id"])
-	DoApiGetWithSimpleResponse(path, nil)
+	path := fmt.Sprintf("/droplets/%s/shutdown/", droplet_id)
+	self.DoApiGetWithSimpleResponse(path, nil)
 }
 
-func DoDropletsPowerOffDroplet(route *Route) {
-	if CmdlineOptions.Verbose {
-		fmt.Printf("DoDropletsPowerOffDroplet: route=%s\n", route)
+func (self *DioceanClient) DoDropletsPowerOffDroplet(droplet_id string) {
+	if self.Verbose {
+		fmt.Printf("DoDropletsPowerOffDroplet: %s\n", droplet_id)
 	}
 
-	path := fmt.Sprintf("/droplets/%s/power_off/", route.Params["droplet_id"])
-	DoApiGetWithSimpleResponse(path, nil)
+	path := fmt.Sprintf("/droplets/%s/power_off/", droplet_id)
+	self.DoApiGetWithSimpleResponse(path, nil)
 }
 
-func DoDropletsPasswordResetDroplet(route *Route) {
-	if CmdlineOptions.Verbose {
-		fmt.Printf("DoDropletsPasswordResetDroplet: route=%s\n", route)
+func (self *DioceanClient) DoDropletsPasswordResetDroplet(droplet_id string) {
+	if self.Verbose {
+		fmt.Printf("DoDropletsPasswordResetDroplet: %s\n", droplet_id)
 	}
 
-	path := fmt.Sprintf("/droplets/%s/password_reset/", route.Params["droplet_id"])
-	DoApiGetWithSimpleResponse(path, nil)
+	path := fmt.Sprintf("/droplets/%s/password_reset/", droplet_id)
+	self.DoApiGetWithSimpleResponse(path, nil)
 }
 
-func DoDropletsResizeDroplet(route *Route) {
-	if CmdlineOptions.Verbose {
-		fmt.Printf("DoDropletsResizeDroplet: route=%s\n", route)
+func (self *DioceanClient) DoDropletsResizeDroplet(droplet_id string, size string) {
+	if self.Verbose {
+		fmt.Printf("DoDropletsResizeDroplet: %s\n", droplet_id)
 	}
 
-	path := fmt.Sprintf("/droplets/%s/resize/", route.Params["droplet_id"])
+	path := fmt.Sprintf("/droplets/%s/resize/", droplet_id)
 	params := &url.Values{}
-	ParamsAddSize(params, route.Params["size"])
-	DoApiGetWithSimpleResponse(path, params)
+	ParamsAddSize(params, size)
+	self.DoApiGetWithSimpleResponse(path, params)
 }
 
-func DoDropletsSnapshotDroplet(route *Route) {
-	if CmdlineOptions.Verbose {
-		fmt.Printf("DoDropletsSnapshotDroplet: route=%s\n", route)
+func (self *DioceanClient) DoDropletsSnapshotDroplet(droplet_id string, name string) {
+	if self.Verbose {
+		fmt.Printf("DoDropletsSnapshotDroplet: %s\n", droplet_id)
 	}
 
-	path := fmt.Sprintf("/droplets/%s/snapshot/", route.Params["droplet_id"])
+	path := fmt.Sprintf("/droplets/%s/snapshot/", droplet_id)
 	params := &url.Values{}
-	name, hasName := route.Params["name"]
-	if hasName {
-		params.Add("name", name)
-	}
-	DoApiGetWithSimpleResponse(path, nil)
+  params.Add("name", name)
+	self.DoApiGetWithSimpleResponse(path, nil)
 }
 
-func DoDropletsPowerOnDroplet(route *Route) {
-	if CmdlineOptions.Verbose {
-		fmt.Printf("DoDropletsPowernfDroplet: route=%s\n", route)
+func (self *DioceanClient) DoDropletsPowerOnDroplet(droplet_id string) {
+	if self.Verbose {
+		fmt.Printf("DoDropletsPowernfDroplet: %s\n", droplet_id)
 	}
 
-	path := fmt.Sprintf("/droplets/%s/power_on/", route.Params["droplet_id"])
-	DoApiGetWithSimpleResponse(path, nil)
+	path := fmt.Sprintf("/droplets/%s/power_on/", droplet_id)
+	self.DoApiGetWithSimpleResponse(path, nil)
 }
 
-func DropletSizesLs(route *Route) {
-	if CmdlineOptions.Verbose {
-		fmt.Fprintf(os.Stderr, "SizesLs: %s\n", route)
-	}
-
+func (self *DioceanClient) DropletSizesLs () {
 	path := "/sizes/"
-	_, body, err := ApiGet(path, nil)
+	_, body, err := self.ApiGet(path, nil)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error performing http.get[%s]: %s\n", path, err)
 		os.Exit(1)
@@ -1056,10 +823,10 @@ func DropletSizesLs(route *Route) {
 	}
 }
 
-func DoRegionsLs(route *Route) {
+func (self *DioceanClient) DoRegionsLs() {
 
 	path := "/regions/"
-	_, body, err := ApiGet(path, nil)
+	_, body, err := self.ApiGet(path, nil)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error performing http.get[%s]: %s\n", path, err)
 		os.Exit(1)
@@ -1080,15 +847,15 @@ func DoRegionsLs(route *Route) {
 	}
 }
 
-func DoSshKeysLs(route *Route) {
+func (self *DioceanClient) DoSshKeysLs() {
 	path := "/ssh_keys/"
-	_, body, err := ApiGet(path, nil)
+	_, body, err := self.ApiGet(path, nil)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error performing http.get[%s]: %s\n", path, err)
 		os.Exit(1)
 	}
 
-	if CmdlineOptions.Verbose {
+	if self.Verbose {
 		fmt.Fprintf(os.Stderr, "body=%s\n", body)
 	}
 
@@ -1099,7 +866,7 @@ func DoSshKeysLs(route *Route) {
 		os.Exit(1)
 	}
 
-	if CmdlineOptions.Verbose {
+	if self.Verbose {
 		fmt.Fprintf(os.Stderr, "resp=%s\n", resp)
 	}
 
@@ -1111,8 +878,8 @@ func DoSshKeysLs(route *Route) {
 	}
 }
 
-func DoSshFixKnownHosts(route *Route) {
-	resp := DropletsLs()
+func (self *DioceanClient) DoSshFixKnownHosts() {
+	resp := self.DropletsLs()
 
 	for _, droplet := range resp.Droplets {
 		cmd := fmt.Sprintf("ssh-keygen -f %s/.ssh/known_hosts -R %s", os.Getenv("HOME"), droplet.Ip_address)
@@ -1133,106 +900,3 @@ func DoSshFixKnownHosts(route *Route) {
 	}
 }
 
-func RouteMatches(route *Route, args []string) (*Route, bool) {
-	if CmdlineOptions.Verbose {
-		fmt.Fprintf(os.Stderr, "Route: %s args: %s\n", route, args)
-	}
-	if len(args) < len(route.Pattern) {
-		return nil, false
-	}
-	var res *Route = &Route{
-		Pattern: route.Pattern,
-		Params:  make(map[string]string),
-		Handler: route.Handler,
-	}
-
-	for idx, part := range route.Pattern {
-		arg := args[idx]
-		res.Args = args[idx:]
-		if CmdlineOptions.Verbose {
-			fmt.Fprintf(os.Stderr, "  part:%s arg:%s rest:%s\n", part, arg, res.Args)
-		}
-		if strings.HasPrefix(part, ":") {
-			res.Params[part[1:]] = arg
-			continue
-		}
-
-		if part == arg {
-			continue
-		}
-
-		if CmdlineOptions.Verbose {
-			fmt.Fprintf(os.Stderr, "  ran out of parts at idx=%d, no match\n", idx)
-		}
-		return nil, false
-	}
-
-	return res, true
-}
-
-func FindMatchingRoute(args []string) *Route {
-	for _, route := range RoutingTable {
-		res, matched := RouteMatches(route, args)
-		if matched {
-			return res
-		}
-	}
-	return nil
-}
-
-func InitConfig() bool {
-	file, e := ioutil.ReadFile(os.Getenv("HOME") + "/.digitalocean.json")
-	if e != nil {
-		fmt.Fprintf(os.Stderr, "File error: %v\n", e)
-		return false
-	}
-
-	json.Unmarshal(file, &Config)
-
-	if _, ok := Config["ClientId"]; !ok {
-		fmt.Fprintf(os.Stderr, "Error: No ClienId in configuration file!\n", e)
-		return false
-	}
-
-	if _, ok := Config["ApiKey"]; !ok {
-		fmt.Fprintf(os.Stderr, "Error: No ApiKey in configuration file!\n", e)
-		return false
-	}
-
-	return true
-}
-
-func main() {
-	flag.BoolVar(&CmdlineOptions.Verbose, "v", false, "Verbose")
-	flag.BoolVar(&CmdlineOptions.WaitForEvent, "w", false, "For commands that return an event_id, wait for the event to complete.")
-	InitRoutingTable()
-	flag.Parse()
-	route := FindMatchingRoute(flag.Args())
-	if CmdlineOptions.Verbose {
-		fmt.Fprintf(os.Stderr, "Args: %s\n", flag.Args())
-	}
-	if CmdlineOptions.Verbose {
-		fmt.Fprintf(os.Stderr, "Route: %s\n", route)
-	}
-
-	if route == nil {
-		fmt.Fprintf(os.Stderr, "Error: unrecognized command: %s\n", flag.Args())
-		ShowGeneralHelp(route)
-		os.Exit(1)
-	}
-
-	if !InitConfig() {
-		fmt.Fprintf(os.Stderr, "Invalid or Missing configuration file.\n")
-		os.Exit(1)
-	}
-	if CmdlineOptions.Verbose {
-		fmt.Fprintf(os.Stderr, "Config: %s\n", Config)
-	}
-
-	if route != nil {
-		if CmdlineOptions.Verbose {
-			fmt.Fprintf(os.Stderr, "Calling route: %s\n", route)
-		}
-		route.Handler(route)
-	}
-}
