@@ -3,7 +3,7 @@ diocean-go
 
 Digital Ocean HTTP API Library, see: https://developers.digitalocean.com/
 
-See also the command line app: https://github.com/kyleburton/diocean-go
+See also the command line app: https://github.com/kyleburton/diocean
 
 
 ### Roadmap
