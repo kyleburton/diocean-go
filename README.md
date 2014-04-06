@@ -9,6 +9,7 @@ See also the command line app: https://github.com/kyleburton/diocean
 ### Roadmap
 
 - documentation
+- define request type structs
 - Convert to a pure api library:
     - move CmdLineOptions into command line client
     - Separate the command line routing table into its own library
