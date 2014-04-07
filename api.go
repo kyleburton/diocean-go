@@ -12,6 +12,7 @@ import (
 	"strings"
 )
 
+// API Client Struct.
 type DioceanClient struct {
   ClientId string
   ApiKey string
@@ -448,6 +449,17 @@ func (self *DioceanClient) ApiGet(path string, params *url.Values) (*http.Respon
 	return resp, body, nil
 }
 
+// Get a value from the map, return defaultValue if k is not present.
+//    m := map[string]interface{} {
+//      "apple": "banana"
+//    }
+//     
+//    MapGetString(m, "foo", "bar")
+//    // => "bar"
+//     
+//    MapGetString(m, "apple", "bar")
+//    // => "banana"
+//     
 func MapGetString(m map[string]interface{}, k string, defaultValue string) string {
 	val, ok := m[k]
 	if ok && val != nil {
@@ -514,6 +526,32 @@ func (self *DioceanClient) DoImageDestroy(image_id string) {
 
 	fmt.Printf("Image Destroyed: %s\n", resp.Status)
 
+}
+
+func (self *DioceanClient) DoImageTransfer(image_id, region_id string) {
+	path := fmt.Sprintf("/images/%s/transfer/", image_id)
+	params := &url.Values{}
+  params.Add("region_id", region_id)
+	_, body, err := self.ApiGet(path, nil)
+
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error performing http.get[%s]: %s\n", path, err)
+		os.Exit(1)
+	}
+
+	var resp SimpleEventResponse
+	resp.Unmarshal(body)
+
+	if resp.Status != "OK" {
+		fmt.Fprintf(os.Stderr, "Error: status != OK status=%s resp=%s\n", resp.Status, string(body))
+		os.Exit(1)
+	}
+
+	fmt.Printf("Image Destroyed: %s\n", resp.Status)
+
+	if self.WaitForEvents {
+		self.WaitForEvent(fmt.Sprintf("%.f", resp.Event_id))
+	}
 }
 
 func (self *DioceanClient) EventShow(eventId string) *EventResponse {
@@ -701,6 +739,9 @@ func (self *DioceanClient) DoDropletsNewDroplet (name string, size string, image
 	fmt.Print(strings.Join(resp.Droplet.ToStringArray(), "\t"))
 	fmt.Print("\n")
 
+	if self.WaitForEvents {
+		self.WaitForEvent(fmt.Sprintf("%.f", resp.Droplet.Event_id))
+	}
 }
 
 func (self *DioceanClient) DoDropletsLsDroplet(droplet_id string) {
