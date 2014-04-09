@@ -469,7 +469,7 @@ func MapGetString(m map[string]interface{}, k string, defaultValue string) strin
 	return defaultValue
 }
 
-func (self *DioceanClient) DoImagesLs() {
+func (self *DioceanClient) ImagesLs() ImagesResponse {
 	path := "/images/"
 	_, body, err := self.ApiGet(path, nil)
 
@@ -480,6 +480,11 @@ func (self *DioceanClient) DoImagesLs() {
 
 	var resp ImagesResponse
 	resp.Unmarshal(body)
+  return resp
+}
+
+func (self *DioceanClient) DoImagesLs() {
+  resp := self.ImagesLs()
 
 	fmt.Print(strings.Join(resp.Header(), "\t"))
 	fmt.Print("\n")
@@ -841,7 +846,7 @@ func (self *DioceanClient) DoDropletsPowerOnDroplet(droplet_id string) {
 	self.DoApiGetWithSimpleResponse(path, nil)
 }
 
-func (self *DioceanClient) DropletSizesLs () {
+func (self *DioceanClient) DropletSizes () DropletSizesResponse {
 	path := "/sizes/"
 	_, body, err := self.ApiGet(path, nil)
 	if err != nil {
@@ -856,6 +861,11 @@ func (self *DioceanClient) DropletSizesLs () {
 		os.Exit(1)
 	}
 
+  return resp
+}
+
+func (self *DioceanClient) DropletSizesLs () {
+  resp := self.DropletSizes()
 	fmt.Print(strings.Join(resp.Header(), "\t"))
 	fmt.Print("\n")
 	for _, size := range resp.Sizes {
@@ -864,8 +874,7 @@ func (self *DioceanClient) DropletSizesLs () {
 	}
 }
 
-func (self *DioceanClient) DoRegionsLs() {
-
+func (self *DioceanClient) RegionsLs() RegionResponse {
 	path := "/regions/"
 	_, body, err := self.ApiGet(path, nil)
 	if err != nil {
@@ -880,6 +889,11 @@ func (self *DioceanClient) DoRegionsLs() {
 		os.Exit(1)
 	}
 
+  return resp
+}
+
+func (self *DioceanClient) DoRegionsLs() {
+  resp := self.RegionsLs()
 	fmt.Print(strings.Join(resp.Header(), "\t"))
 	fmt.Print("\n")
 	for _, region := range resp.Regions {
@@ -888,7 +902,7 @@ func (self *DioceanClient) DoRegionsLs() {
 	}
 }
 
-func (self *DioceanClient) DoSshKeysLs() {
+func (self *DioceanClient) SshKeysLs() SshKeysResponse {
 	path := "/ssh_keys/"
 	_, body, err := self.ApiGet(path, nil)
 	if err != nil {
@@ -907,6 +921,12 @@ func (self *DioceanClient) DoSshKeysLs() {
 		os.Exit(1)
 	}
 
+
+  return resp
+}
+
+func (self *DioceanClient) DoSshKeysLs() {
+  resp := self.SshKeysLs()
 	if self.Verbose {
 		fmt.Fprintf(os.Stderr, "resp=%s\n", resp)
 	}
